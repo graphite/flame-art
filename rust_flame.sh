@@ -3,7 +3,7 @@
 set -e
 
 NAME=${1%.*}
-#python3 generate-flames.py $1 > build/$NAME.rs
+python3 generate-flames.py $1 > build/$NAME.rs
 rustc -g --out-dir build build/$NAME.rs
 # sudo is required unless perf_event_paranoid is adjusted
 # sudo with & messes up the terminal

@@ -7,19 +7,19 @@ class RustCleaner:
     def clear(data):
         result = []
         base_name = data[0].split(' ')[0] + '::'
-        for l in data:
-            if l.startswith('\t'):
-                function = l.strip().split(' ', 1)[1]
+        for line in data:
+            if line.startswith('\t'):
+                function = line.strip().split(' ', 1)[1]
                 if not function.startswith(base_name):
                     continue
-            if not l.strip():
+            if not line.strip():
                 # Empty line, check that the trace starts from main
                 function = result[-1].strip().split(' ', 1)[1]
                 if not function.startswith(base_name + 'main'):
                     # Unknown/anon/broken trace
                     while result.pop().strip():
                         pass
-            result.append(l)
+            result.append(line)
         return ''.join(result)
 
 

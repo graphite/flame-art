@@ -2,7 +2,7 @@
 
 # Takes a JSON file that contains the points on the outline and generates
 # a program that results in a Flame Graph matching this outline.
-# The canvas is 304x25 and the points in the input have to be ordered left to
+# The canvas is 304x100 and the points in the input have to be ordered left to
 # right.
 # https://github.com/brendangregg/FlameGraph
 
@@ -11,7 +11,60 @@ import json
 
 
 class RustHelper:
-    def validate_fname(fname):
+
+    BASE = """
+fn main() {{
+    loop {{
+        let mut _a:u128 = 2;
+{body}
+    }}
+}}
+
+{functions}
+"""
+
+    FN = """
+fn {name}() {{
+    let mut _a:u128 = 2;
+{body}
+}}
+"""
+
+    FILLER = '_a %= 1024;'
+
+    def __init__(self, fname):
+        self.validate_fname(fname)
+        self.fname = fname
+
+    def fn_name(self, index):
+        return self.fname + '{:06d}'.format(index)
+
+    def fn_body(self, calls, offset=4):
+        if len(calls) == 1 and calls[0] < 0:
+            # No further calls
+            return (' ' * offset + self.FILLER + '\n') * abs(calls[0])
+        else:
+            body = []
+            for call in calls:
+                if call < 0:
+                    raise ValueError('Filler in a non-filler function')
+                body.append('{}{}();'.format(' ' * offset, self.fn_name(call)))
+            return '\n'.join(body)
+
+    def generate(self, callgraph):
+        main = callgraph[0]
+        main_body = self.fn_body(main.calls, offset=8)
+        functions = []
+        for i, f in enumerate(callgraph[1:]):
+            functions.append(
+                self.FN.format(
+                    name=self.fn_name(i + 1), body=self.fn_body(f.calls)
+                )
+            )
+
+        return self.BASE.format(body=main_body, functions='\n'.join(functions))
+
+    def validate_fname(self, fname):
         '''Validates the name of the filler function'''
         # TODO: https://doc.rust-lang.org/reference/identifiers.html
         # TODO: replace the below with proper validation
@@ -21,7 +74,7 @@ class RustHelper:
 
 HELPERS = {'rust': RustHelper}
 LENGTH = 304
-HEIGHT = 25
+HEIGHT = 100
 
 
 class Picture:
@@ -49,8 +102,8 @@ class Picture:
         else:
             raise ValueError('Only 0 and 1 allowed for the bitmap')
 
-    def fill(self, nulls=set()):
-        to_fill = [(i, 0) for i in range(LENGTH) if i not in nulls]
+    def fill(self):
+        to_fill = [(i, 0) for i in range(LENGTH) if self[(i, 0)] == 0]
         filled = set(to_fill)
         while to_fill:
             n = to_fill.pop(0)
@@ -72,17 +125,11 @@ def parse_outline(outline):
     if outline[-1] != [LENGTH - 1, 0]:
         outline.append([LENGTH - 1, 0])
 
-    nulls = set()
-
     picture = Picture()
 
     p1 = outline[0]
     picture[p1] = 1
     for p2 in outline[1:]:
-        if p1[1] == 0:
-            nulls.add(p1[0])
-        if p2[1] == 0:
-            nulls.add(p2[0])
         x1, y1 = p1
         x2, y2 = p2
         dx, dy = x2 - x1, y2 - y1
@@ -100,7 +147,7 @@ def parse_outline(outline):
                 picture[(x, i)] = 1
         p1 = p2
 
-    picture.fill(nulls)
+    picture.fill()
     return picture
 
 
@@ -138,11 +185,12 @@ def to_functions(picture):
                 if v == picture[(i, f.depth + 1)]:
                     continue
                 if v == 0:
-                    f.calls.append(
+                    functions.append(
                         Function(
                             f.depth + 1, start, i - 1, calls=[-1 * (i - start)]
                         )
                     )
+                    f.calls.append(len(functions) - 1)
                 else:
                     functions.append(Function(f.depth + 1, start, i - 1))
                     f.calls.append(len(functions) - 1)
@@ -150,11 +198,12 @@ def to_functions(picture):
                 v = 1 - v
 
             if v == 0:
-                f.calls.append(
+                functions.append(
                     Function(
                         f.depth + 1, start, i, calls=[-1 * (i - start + 1)]
                     )
                 )
+                f.calls.append(len(functions) - 1)
             else:
                 functions.append(Function(f.depth + 1, start, i))
                 f.calls.append(len(functions) - 1)
@@ -185,12 +234,13 @@ def run():
         help='The base name of the filler function'
     )
     args = parser.parse_args()
-    helper = HELPERS[args.language]
-    helper.validate_fname(args.name)
+    helper = HELPERS[args.language](args.name)
 
     outline = json.load(args.outline)
     picture = parse_outline(outline)
     functions = to_functions(picture)
+    program = helper.generate(functions)
+    print(program)
 
 
 if __name__ == '__main__':
