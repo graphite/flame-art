@@ -2,7 +2,8 @@
 
 set -e
 
-NAME=${1%.*}
+NAME=${1##*/}
+NAME=${NAME%.*}
 python3 generate-flames.py $1 > build/$NAME.rs
 rustc -g --out-dir build build/$NAME.rs
 # sudo is required unless perf_event_paranoid is adjusted

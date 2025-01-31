@@ -226,6 +226,10 @@ def run():
              'canvas sorted left to right'.format(LENGTH, HEIGHT)
     )
     parser.add_argument(
+        '-p', '--print-picture', action='store_true',
+        default=False, help='Print bitmap and exist'
+    )
+    parser.add_argument(
         '-l', '--language', default='rust',
         choices=['rust'], help='Target language'
     )
@@ -238,6 +242,9 @@ def run():
 
     outline = json.load(args.outline)
     picture = parse_outline(outline)
+    if args.print_picture:
+        print(picture)
+        return
     functions = to_functions(picture)
     program = helper.generate(functions)
     print(program)
