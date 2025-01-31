@@ -105,13 +105,13 @@ def parse_outline(outline):
 
 
 class Function:
-    def __init__(self, depth, start, end):
+    def __init__(self, depth, start, end, calls=None):
         self.depth = depth
         self.start = start
         self.end = end
         # Positive number is a call to an indexed function.
         # Negative number indicates how long to spend in this function.
-        self.calls = []
+        self.calls = calls if calls else []
 
     def __str__(self):
         return str(self.calls)
@@ -121,11 +121,13 @@ class Function:
 
 
 def to_functions(picture):
-    print(picture)
     functions = [Function(0, 0, LENGTH - 1)]
     cur = 0
     while cur < len(functions):
         f = functions[cur]
+        if f.calls:
+            cur += 1
+            continue
         if f.depth == HEIGHT - 1:
             # Deepest call, just fill in
             f.calls.append(f.start - f.end - 1)
@@ -136,7 +138,11 @@ def to_functions(picture):
                 if v == picture[(i, f.depth + 1)]:
                     continue
                 if v == 0:
-                    f.calls.append(-1 * (i - start))
+                    f.calls.append(
+                        Function(
+                            f.depth + 1, start, i - 1, calls=[-1 * (i - start)]
+                        )
+                    )
                 else:
                     functions.append(Function(f.depth + 1, start, i - 1))
                     f.calls.append(len(functions) - 1)
@@ -144,7 +150,11 @@ def to_functions(picture):
                 v = 1 - v
 
             if v == 0:
-                f.calls.append(-1 * (i - start + 1))
+                f.calls.append(
+                    Function(
+                        f.depth + 1, start, i, calls=[-1 * (i - start + 1)]
+                    )
+                )
             else:
                 functions.append(Function(f.depth + 1, start, i))
                 f.calls.append(len(functions) - 1)
@@ -181,7 +191,6 @@ def run():
     outline = json.load(args.outline)
     picture = parse_outline(outline)
     functions = to_functions(picture)
-    print(functions)
 
 
 if __name__ == '__main__':
